@@ -10,23 +10,31 @@ DaisyHardware hw;
 float filter_freq;
 float filter_res;
 float atten_fm;
+float verb_fback;
+float wet_amt;
 
 static MoogLadder flt;
 static Oscillator osc, lfo;
+static ReverbSc verb;
 
-void MyCallback(float **in, float **out, size_t size) {
+void AudioCallback(float **in, float **out, size_t size) {
   float osc_sample, output, lfo_sample;
-    
+
   for (size_t i = 0; i < size; i++) {
+    float rev_tail0, rev_tail1;
+
     lfo_sample = lfo.Process();
-    
-    osc.SetFreq(100.0 + 100.0 * lfo_sample);
+
+    // lfo_sample is between -1 and 1
+    osc.SetFreq(200.0 + 100.0 * lfo_sample);
     osc_sample = osc.Process();
 
     output = flt.Process(osc_sample);
 
-    out[0][i] = output;
-    out[1][i] = output;
+    verb.Process(output, output, &rev_tail0, &rev_tail1);
+
+    out[0][i] = (1 - wet_amt) * output + wet_amt * rev_tail0;
+    out[1][i] = (1 - wet_amt) * output + wet_amt * rev_tail1;
   }
 }
 
@@ -52,13 +60,34 @@ void setup() {
   osc.SetFreq(100);
   osc.SetAmp(0.25);
 
-  DAISY.begin(MyCallback);
+  // set reverb params
+  verb.Init(sample_rate);
+  verb.SetFeedback(0.2);
+  verb.SetLpFreq(16000);
+
+  DAISY.begin(AudioCallback);
 }
 
+// A0 filter freq
+// A1 resonance
+// A2 lfo freq
+// A3 osc freq
+// A4 lfo amt -> filter
+// A5 room size
+// A6 wet + dry
+// A7 master volume
+
 void loop() {
+  // TODO: use Arduino's map() function
+  // 0 - 5000.0
   filter_freq = (1023 - analogRead(A0)) / 1023.0 * 5000.0;
   flt.SetFreq(filter_freq);
-  filter_res = (1023 - analogRead(A1)) / 1023.0 - 0.2;
+  // 0 - 0.8
+  filter_res = (1023 - analogRead(A1)) / 1023.0 / 1.25;
   flt.SetRes(filter_res < 0.0 ? 0.0 : filter_res);
   lfo.SetFreq(.4);
+  // 0.4 - 1.0
+  verb_fback = 0.4 + (1023 - analogRead(A5)) / 1023.0 * 0.6;
+  verb.SetFeedback(verb_fback);
+  wet_amt = (1023 - analogRead(A6)) / 1023.0;
 }

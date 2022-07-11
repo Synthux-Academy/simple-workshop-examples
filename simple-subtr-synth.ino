@@ -19,12 +19,13 @@ float master_vol;
 static MoogLadder flt;
 static Oscillator osc, lfo;
 static ReverbSc verb;
+static Chorus chorus;
 
 void AudioCallback(float **in, float **out, size_t size) {
   float osc_sample, output, lfo_sample;
 
   for (size_t i = 0; i < size; i++) {
-    float rev_tail0, rev_tail1, flt_freq;
+    float rev_tail0, rev_tail1, flt_freq, chorus0, chorus1;
 
     // lfo_sample is between -0.5 and 0.5
     lfo_sample = (lfo.Process() + 0.5) * 5000;
@@ -36,10 +37,15 @@ void AudioCallback(float **in, float **out, size_t size) {
 
     output = flt.Process(osc_sample);
 
-    verb.Process(output, output, &rev_tail0, &rev_tail1);
+    chorus.Process(output);
+    chorus0 = chorus.GetRight();
+    chorus1 = chorus.GetRight();
+
+    verb.Process(chorus0, chorus1, &rev_tail0, &rev_tail1);
 
     out[0][i] = ((1 - wet_amt) * output + wet_amt * rev_tail0) * master_vol;
     out[1][i] = ((1 - wet_amt) * output + wet_amt * rev_tail1) * master_vol;
+
   }
 }
 
@@ -64,6 +70,12 @@ void setup() {
   osc.SetWaveform(Oscillator::WAVE_POLYBLEP_SAW);
   osc.SetFreq(110);
   osc.SetAmp(0.25);
+
+  // set chorus params
+  chorus.Init(sample_rate);
+  chorus.SetLfoFreq(.33f, .2f);
+  chorus.SetLfoDepth(1.f, 1.f);
+  chorus.SetDelay(.75f, .9f);
 
   // set reverb params
   verb.Init(sample_rate);

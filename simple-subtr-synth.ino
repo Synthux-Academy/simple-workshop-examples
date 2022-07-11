@@ -83,7 +83,6 @@ void setup() {
 // A7 master volume
 
 void loop() {
-  // TODO: use Arduino's map() function
   lfo_freq = (1023.0 - analogRead(A2)) / 16.0f;
   lfo.SetFreq(lfo_freq);
   // 0 - 5000.0
@@ -95,11 +94,15 @@ void loop() {
   verb_fback = 0.4 + (1023 - analogRead(A5)) / 1023.0 * 0.6;
   verb.SetFeedback(verb_fback);
   wet_amt = (1023 - analogRead(A6)) / 1023.0;
-  // 110 - 2099
-  osc_freq = 2 * (1023 - analogRead(A3)) + 55;
+  // one octave
+  osc_freq = semitone_to_hertz(map((1023 - analogRead(A3)), 0, 1023, 0, 12));
   osc.SetFreq(osc_freq);
   // 0 - 1.0
   lfo_amt = (1023 - analogRead(A4)) / 1023.0;
   // 0 - 1.0
   master_vol = (1023 - analogRead(A7)) / 1023.0;
+}
+
+float semitone_to_hertz(uint8_t note_number) {
+  return 220 * pow(2, ((float)note_number - 0) / 12);
 }

@@ -1,4 +1,4 @@
-.PHONY: clean connect upload
+.PHONY: clean connect upload simple-subtr-synth
 
 PORT = /dev/ttyACM0
 FQBN = STMicroelectronics:stm32:GenH7:pnum=DAISY_SEED,upload_method=dfuMethod,xserial=generic,usb=CDCgen,xusb=FS,opt=osstd,dbg=none,rtlib=nano
@@ -11,8 +11,8 @@ all: .make/installed build
 		DaisyDuino
 	touch .make/installed
 
-build: .make/installed *.ino
-	arduino-cli compile --fqbn $(FQBN) --build-path build .
+build: .make/installed examples/$(EXAMPLE)/*.ino
+	arduino-cli compile --fqbn $(FQBN) --build-path build examples/$(EXAMPLE)
 
 .make/uploaded: build
 	arduino-cli upload --port $(PORT) --fqbn $(FQBN) --input-dir build

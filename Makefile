@@ -1,4 +1,4 @@
-.PHONY: clean connect upload simple-subtr-synth
+.PHONY: clean connect upload
 
 PORT = /dev/ttyACM0
 FQBN = STMicroelectronics:stm32:GenH7:pnum=DAISY_SEED,upload_method=dfuMethod,xserial=generic,usb=CDCgen,xusb=FS,opt=osstd,dbg=none,rtlib=nano

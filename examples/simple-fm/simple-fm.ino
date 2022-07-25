@@ -21,6 +21,16 @@ static Oscillator carrier, modulator;
 static ReverbSc verb;
 static Chorus chorus;
 
+// Reads a simple pot (inverted) and normalizes it to values between 0 and 1
+float simpleAnalogRead(uint32_t pin) {
+  return (1023.0 - (float)analogRead(pin)) / 1023.0;
+}
+
+// Reads a simple pot and maps it to a value bewtween to integer values
+float simpleAnalogReadAndMap(uint32_t pin, long min, long max) {
+  return map(1023 - analogRead(pin), 0, 1023, min, max);
+}
+
 void AudioCallback(float **in, float **out, size_t size) {
   float carrier_sample, modulator_sample, output;
 
@@ -95,24 +105,24 @@ void setup() {
 // A7 master volume
 
 void loop() {
-  modulator_freq = (1023.0 - analogRead(A2)) / 1023 * 5 * carrier_freq;
+  modulator_freq = simpleAnalogRead(A2) * 5 * carrier_freq;
   modulator.SetFreq(modulator_freq);
   // 0 - 5000.0
-  filter_freq = (1023 - analogRead(A0)) / 1023.0 * 5000.0;
-  // 0 - 0.8
-  filter_res = (1023 - analogRead(A1)) / 1023.0 / 1.25;
+  filter_freq = fmap(simpleAnalogRead(A0), 0, 5000, Mapping::EXP);
+  // 0 - 0.8 (tame the filter a bit)
+  filter_res = simpleAnalogRead(A1) / 1.25;
   flt.SetRes(filter_res < 0.0 ? 0.0 : filter_res);
   // 0.4 - 1.0
-  verb_fback = 0.4 + (1023 - analogRead(A5)) / 1023.0 * 0.6;
+  verb_fback = 0.4 + simpleAnalogRead(A5) * 0.6;
   verb.SetFeedback(verb_fback);
-  wet_amt = (1023 - analogRead(A6)) / 1023.0;
+  wet_amt = simpleAnalogRead(A6);
   // one octave
   carrier_freq =
-      semitone_to_hertz(map((1023 - analogRead(A3)), 0, 1023, 0, 12));
+      semitone_to_hertz(simpleAnalogReadAndMap(A3, 0, 12));
   // 0 - 1.0
-  fm_amt = (1023 - analogRead(A4)) / 1023.0;
+  fm_amt = simpleAnalogRead(A4);
   // 0 - 1.0
-  master_vol = (1023 - analogRead(A7)) / 1023.0;
+  master_vol = simpleAnalogRead(A7);
 }
 
 float semitone_to_hertz(uint8_t note_number) {

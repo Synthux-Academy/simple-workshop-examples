@@ -1,10 +1,21 @@
-// Title: simple subtractive synth
-// Description: oscillators! filters! lfos! reverb!
-// Hardware: Daisy Seed
-// Author: Chris Maniewski
+/**
+ * Title: simple subtractive synth
+ * Description: oscillators! filters! lfos! reverb!
+ * Hardware: Daisy Seed
+ * Author: Chris Maniewski
+
+ * Analog port mapping:
+ * A0 filter freq
+ * A1 resonance
+ * A2 lfo freq
+ * A3 osc freq
+ * A4 lfo amt -> filter
+ * A5 room size
+ * A6 wet + dry
+ * A7 master volume
+ */
 
 #include "DaisyDuino.h"
-// #include "utility/DaisySP/modules/dsp.h"
 
 DaisyHardware hw;
 
@@ -20,28 +31,18 @@ float master_vol;
 static MoogLadder flt;
 static Oscillator osc, lfo;
 static ReverbSc verb;
-static Chorus chorus;
-
-
-// Reads a simple pot (inverted) and normalizes it to values between 0 and 1
-float simpleAnalogRead(uint32_t pin) {
-  return (1023.0 - (float)analogRead(pin)) / 1023.0;
-}
-
-// Reads a simple pot and maps it to a value bewtween to integer values
-float simpleAnalogReadAndMap(uint32_t pin, long min, long max) {
-  return map(1023 - analogRead(pin), 0, 1023, min, max);
-}
 
 void AudioCallback(float **in, float **out, size_t size) {
   float osc_sample, output, lfo_sample;
 
   for (size_t i = 0; i < size; i++) {
-    float rev_tail0, rev_tail1, flt_freq, chorus0, chorus1;
+    float rev_tail0, rev_tail1, flt_freq;
 
-    // lfo_sample is between -0.5 and 0.5
-    lfo_sample = (lfo.Process() + 0.5) * 5000;
+    // lfo_sample is between -0.5 and 0.5, so we add 0.5 to bring it between 0 and 1 first
+    lfo_sample = fmap(lfo.Process() + 0.5, 0, 5000);
 
+    // Here we mix two signals: the filter_freq that was set by the knob and the lfo_sample that we received earlier.
+    // The mix ratios are determined by the lfo_amt
     flt_freq = filter_freq * (1 - lfo_amt) + lfo_sample * lfo_amt;
     flt.SetFreq(flt_freq);
 
@@ -49,47 +50,39 @@ void AudioCallback(float **in, float **out, size_t size) {
 
     output = flt.Process(osc_sample);
 
-    chorus.Process(output);
-    chorus0 = chorus.GetRight();
-    chorus1 = chorus.GetRight();
+    verb.Process(output, output, &rev_tail0, &rev_tail1);
 
-    verb.Process(chorus0, chorus1, &rev_tail0, &rev_tail1);
-
+    // Here we mix two signals again: the output that comes from the filter and the reverb tails.
+    // The mix ratios are determined by the wet_amt.
+    // After that everything is attenuated by multiplying it with the master volume
     out[0][i] = ((1 - wet_amt) * output + wet_amt * rev_tail0) * master_vol;
     out[1][i] = ((1 - wet_amt) * output + wet_amt * rev_tail1) * master_vol;
-
   }
 }
 
 void setup() {
   float sample_rate;
-  // Initialize for Daisy pod at 48kHz
+  // Initialize Daisy at 48kHz
   hw = DAISY.init(DAISY_SEED, AUDIO_SR_48K);
   sample_rate = DAISY.get_samplerate();
 
-  // initialize Moogladder object
+  // Initialize the Moogladder filter
   flt.Init(sample_rate);
   flt.SetRes(0.7);
 
-  // set parameters for sine oscillator object
+  // Set parameters for the LFO
   lfo.Init(sample_rate);
   lfo.SetWaveform(Oscillator::WAVE_TRI);
   lfo.SetAmp(0.5);
   lfo.SetFreq(.4);
 
-  // set parameters for sine oscillator object
+  // Set parameters for the oscillator
   osc.Init(sample_rate);
   osc.SetWaveform(Oscillator::WAVE_POLYBLEP_SAW);
   osc.SetFreq(110);
   osc.SetAmp(0.25);
 
-  // set chorus params
-  chorus.Init(sample_rate);
-  chorus.SetLfoFreq(.33f, .2f);
-  chorus.SetLfoDepth(1.f, 1.f);
-  chorus.SetDelay(.75f, .9f);
-
-  // set reverb params
+  // Set parameters for the reverb
   verb.Init(sample_rate);
   verb.SetFeedback(0.2);
   verb.SetLpFreq(16000);
@@ -97,36 +90,66 @@ void setup() {
   DAISY.begin(AudioCallback);
 }
 
-// A0 filter freq
-// A1 resonance
-// A2 lfo freq
-// A3 osc freq
-// A4 lfo amt -> filter
-// A5 room size
-// A6 wet + dry
-// A7 master volume
-
 void loop() {
+  // Map the LFO frequency knob to values between 0 and 64 Hertz
   lfo_freq = fmap(simpleAnalogRead(A2), 0, 64);
   lfo.SetFreq(lfo_freq);
-  // 0 - 5000.0
+
+  // We are using the 4th fmap parameter here, which determines the mapping curve
+  // Mapping::EXP means that the higher the frequency rises, the faster it rises
+  // This is analogous to how we percieve sound, so the knob will feel more natural
   filter_freq = fmap(simpleAnalogRead(A0), 0, 5000, Mapping::EXP);
-  // 0 - 0.8 (tame the filter a bit)
+
+  // Tame the filter a bit by dividing the resonance by more than 1
   filter_res = simpleAnalogRead(A1) / 1.25;
-  flt.SetRes(filter_res < 0.0 ? 0.0 : filter_res);
-  // 0.4 - 1.0
+  flt.SetRes(filter_res);
+
+  // Here we eliminate the dead-zone of the reverb knob.
+  // By adding 0.4 the reverb feedback will always be at least 0.4.
+  // Then we multiply the read value by 0.6 so the resulting feedback value will never by greater than 1
+  // So we skip the boring part between 0 and 0.4 where nothing really happens when turning the knob
   verb_fback = 0.4 + simpleAnalogRead(A5) * 0.6;
   verb.SetFeedback(verb_fback);
+
+  // Set the wet amount for the effect. This is between 0 and 1 (100%)
   wet_amt = simpleAnalogRead(A6);
-  // one octave
-  osc_freq = semitone_to_hertz(simpleAnalogReadAndMap(A3, 0, 12));
+
+  // Map the oscillator frequency knob to values between 220 and 440 Hertz (one octave)
+  osc_freq = fmap(simpleAnalogRead(A3), 220, 440);
+  // Uncomment this if you want your oscillator frequency to jump in semitone steps instead
+  // osc_freq = semitone_to_hertz(simpleAnalogReadAndMap(A3, 0, 12));
   osc.SetFreq(osc_freq);
-  // 0 - 1.0
+
+  // Set the amount for the LFO VCA. This is between 0 and 1 (100%)
   lfo_amt = simpleAnalogRead(A4);
-  // 0 - 1.0
+
+  // Set the master volume. This is between 0 and 1 (100%)
   master_vol = simpleAnalogRead(A7);
 }
 
+/**
+ * Reads a Simple board pot (inverted) and normalizes it to values between 0 and 1
+ *
+ * This is a helper function to make our lives easier, as we are using this pattern a lot
+ */
+float simpleAnalogRead(uint32_t pin) {
+  return (1023.0 - (float)analogRead(pin)) / 1023.0;
+}
+
+/**
+ * Reads a simple pot and maps it to a value bewtween to integer values
+ *
+ * This is a helper function to make our lives easier, as we are using this pattern a lot
+ */
+float simpleAnalogReadAndMap(uint32_t pin, long min, long max) {
+  return map(1023 - analogRead(pin), 0, 1023, min, max);
+}
+
+/**
+ * Convert a note number to Hertz
+ *
+ * Uses the base frequency of 220Hz, i.e. a note number of 0 equals 220Hz
+ */
 float semitone_to_hertz(uint8_t note_number) {
   return 220 * pow(2, ((float)note_number - 0) / 12);
 }

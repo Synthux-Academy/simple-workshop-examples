@@ -17,7 +17,7 @@ void setup() {
 
   // OSCILLATOR SETUP
   oscillator01.Init(sample_rate);
-  oscillator01.SetFreq(100);
+  oscillator01.SetFreq(200);
   oscillator01.SetWaveform(oscillator01.WAVE_SAW);
 
   // FILTER SETUP
@@ -38,9 +38,9 @@ void setup() {
 
 void ProcessAudio(float **in, float **out, size_t size) {
   for (size_t i = 0; i < size; i++) {
-
-    out[0][i] = filter.Process(oscillator01.Process());
-
+    float sample = filter.Process(oscillator01.Process());
+    out[0][i] = sample;
+    out[1][i] = sample;
   }
 }
 
@@ -52,6 +52,6 @@ void ProcessAudio(float **in, float **out, size_t size) {
 void loop() {
 
   // FILTER CONTROL
-  filter.SetFreq(analogRead(A0));
+  filter.SetFreq(1023 - analogRead(A0));
 
 }

@@ -3,21 +3,23 @@
 
 #include "DaisyDuino.h"
 
-static Oscillator oscillator01;
+static Oscillator osc;
 
 ////////////////////////////////////////////////////////////////
 ///////////////////// START SYNTH SETUP ////////////////////////
 
 
 void setup() {
+  float sample_rate;
   // DAISY SETUP
   DAISY.init(DAISY_SEED, AUDIO_SR_48K);
-  float sample_rate = DAISY.get_samplerate();
+  sample_rate = DAISY.get_samplerate();
 
   // OSCILLATOR SETUP
-  oscillator01.Init(sample_rate);
-  oscillator01.SetFreq(100);
-  oscillator01.SetWaveform(oscillator01.WAVE_SAW);
+  osc.Init(sample_rate);
+  osc.SetFreq(440);
+  osc.SetAmp(0.5);
+  osc.SetWaveform(osc.WAVE_TRI);
 
   // DAISY SETUP
   DAISY.begin(ProcessAudio);
@@ -34,9 +36,9 @@ void setup() {
 
 void ProcessAudio(float **in, float **out, size_t size) {
   for (size_t i = 0; i < size; i++) {
-
-    out[0][i] = oscillator01.Process();
-
+    float sample = osc.Process();
+    out[0][i] = sample;
+    out[1][i] = sample;
   }
 }
 

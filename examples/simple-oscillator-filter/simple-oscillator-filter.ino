@@ -4,6 +4,7 @@
 #include "DaisyDuino.h"
 
 static Oscillator oscillator01;
+static MoogLadder filter;
 
 ////////////////////////////////////////////////////////////////
 ///////////////////// START SYNTH SETUP ////////////////////////
@@ -18,6 +19,9 @@ void setup() {
   oscillator01.Init(sample_rate);
   oscillator01.SetFreq(100);
   oscillator01.SetWaveform(oscillator01.WAVE_SAW);
+
+  // FILTER SETUP
+  filter.Init(sample_rate);
 
   // DAISY SETUP
   DAISY.begin(ProcessAudio);
@@ -35,7 +39,7 @@ void setup() {
 void ProcessAudio(float **in, float **out, size_t size) {
   for (size_t i = 0; i < size; i++) {
 
-    out[0][i] = oscillator01.Process();
+    out[0][i] = filter.Process(oscillator01.Process());
 
   }
 }
@@ -45,4 +49,9 @@ void ProcessAudio(float **in, float **out, size_t size) {
 ///////////////////// START CONTROLS LOOP //////////////////////
 
 
-void loop() {}
+void loop() {
+
+  // FILTER CONTROL
+  filter.SetFreq(analogRead(A0));
+
+}

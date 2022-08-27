@@ -8,7 +8,8 @@ all: .make/installed build
 .make/installed:
 	arduino-cli core install STMicroelectronics:stm32
 	arduino-cli lib install \
-		DaisyDuino
+		DaisyDuino \
+    "MIDI Library"
 	touch .make/installed
 
 build: .make/installed examples/$(EXAMPLE)/*.ino
